@@ -36,7 +36,12 @@
 
     /* ── Top bar ── */
     #topbar { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 52px; background: var(--bar); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-    #brand { font-weight: 700; font-size: 15px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+    #brand {
+      font: inherit; font-weight: 700; font-size: 15px; white-space: nowrap; display: flex; align-items: center; gap: 6px;
+      background: none; border: none; color: inherit; cursor: pointer; padding: 4px 8px; margin: -4px -8px; border-radius: 8px; text-align: left;
+    }
+    #brand:hover { background: var(--bg); }
+    #brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     #settings { display: flex; align-items: center; gap: 6px; margin-left: auto; }
     #settings select, #settings input { height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); font-size: 13px; outline: none; }
     #settings select:focus, #settings input:focus { border-color: var(--accent); }
@@ -76,8 +81,28 @@
     #corpus-stats { padding: 7px 10px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); min-height: 30px; }
 
     /* ── Chat panel ── */
-    #chat-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    #chat-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
     #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* ── About overlay ── */
+    #about-overlay {
+      position: absolute; inset: 0; z-index: 5; overflow-y: auto; background: var(--bg);
+      border-left: 1px solid var(--border); box-shadow: inset 0 1px 0 var(--border);
+    }
+    #about-overlay.hidden { display: none; }
+    #about-inner { max-width: 640px; margin: 0 auto; padding: 20px 20px 28px; }
+    #about-inner h2 { font-size: 18px; font-weight: 700; margin-bottom: 10px; color: var(--text); }
+    #about-inner h3 { font-size: 14px; font-weight: 600; margin: 22px 0 8px; color: var(--text); }
+    #about-inner p { font-size: 14px; line-height: 1.65; color: var(--text); margin-bottom: 10px; }
+    #about-inner ul, #about-inner ol { font-size: 14px; line-height: 1.65; color: var(--text); padding-left: 20px; margin: 0 0 8px; }
+    #about-inner li { margin-bottom: 6px; }
+    #about-inner .about-lead { color: var(--muted); font-size: 14px; line-height: 1.65; margin-bottom: 16px; }
+    #about-close {
+      margin-bottom: 8px; padding: 7px 14px; background: var(--accent); color: #fff; border: none; border-radius: 6px;
+      font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: background .15s;
+    }
+    #about-close:hover { background: var(--accent-h); }
+    #about-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
     /* ── Empty state ── */
     #empty { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; color: var(--muted); text-align: center; gap: 10px; padding: 40px; }
@@ -130,7 +155,7 @@
 <body>
 <div id="app">
   <header id="topbar">
-    <div id="brand">⚡ RAGatha Ch'Bot</div>
+    <button type="button" id="brand" aria-expanded="false" aria-controls="about-overlay" title="About this demo">⚡ RAGatha Ch'Bot</button>
     <div id="settings">
       <span class="lbl" data-tip="Which AI model answers your questions. gpt-4o-mini is the cheapest OpenAI option. Llama and Mixtral are free via Groq — change the API endpoint below to use them.">Model ⓘ</span>
       <select id="model-select">
@@ -188,6 +213,40 @@
           <button id="send-btn" disabled>Send</button>
         </div>
       </div>
+      <div id="about-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
+        <div id="about-inner">
+          <button type="button" id="about-close">← Back to chat</button>
+          <h2 id="about-title">About this demo</h2>
+          <p class="about-lead"><strong>RAGatha Ch'Bot</strong> is a small, single-file example of a browser RAG-style chatbot: upload your own documents, ask questions, and see answers grounded in what you added. It is meant as a feature showcase, not a production system.</p>
+
+          <h3>What you can do</h3>
+          <ul>
+            <li>Upload <strong>PDF</strong>, <strong>DOCX</strong>, <strong>TXT</strong>, or <strong>Markdown</strong> from the sidebar (drag-and-drop or browse).</li>
+            <li>Documents are parsed in your browser (pdf.js + mammoth) and split into overlapping chunks for search.</li>
+            <li>Questions use lightweight <strong>TF-IDF</strong> retrieval over your corpus (top 5 chunks by default), with extra query expansion from chat history and a HyDE-style synthetic paragraph to improve matching.</li>
+            <li>Answers stream back as <strong>Markdown</strong> (sanitized), with <strong>source chips</strong> showing which document chunks were used.</li>
+            <li>After a document loads, you may get <strong>suggested questions</strong> as chips above the input.</li>
+            <li>Copy any assistant reply with the <strong>Copy</strong> button under the bubble.</li>
+            <li>Your corpus lives in <strong>IndexedDB</strong>; chat and settings (API URL, key, model) persist in <strong>localStorage</strong> in this browser only.</li>
+            <li>Pick any <strong>OpenAI-compatible</strong> endpoint and model in the top bar—OpenAI, Groq, Ollama, LM Studio, and others work by changing the base URL.</li>
+          </ul>
+
+          <h3>How it works (short version)</h3>
+          <ol>
+            <li><strong>Ingest</strong> — Text is extracted, chunked (~1200 chars with overlap), and each chunk gets a simple word-frequency profile.</li>
+            <li><strong>Retrieve</strong> — Your question (expanded) is scored against chunks; the best matches are bundled as context for the model.</li>
+            <li><strong>Answer</strong> — The API receives a system prompt with those excerpts plus recent chat; the reply streams into the chat.</li>
+          </ol>
+
+          <h3>Worth knowing</h3>
+          <ul>
+            <li>Retrieval is TF-IDF, not embedding / vector search—good for a demo, not cutting-edge semantic search.</li>
+            <li>Scanned PDFs without real text will not work well; image-only pages are out of scope.</li>
+            <li>API keys are stored in the browser as plain text; do not use on shared machines.</li>
+            <li>Browser storage has size limits; huge libraries may hit quota.</li>
+          </ul>
+        </div>
+      </div>
     </main>
   </div>
 </div>
@@ -215,6 +274,29 @@ const el = {
 const lsGet = k => localStorage.getItem(k);
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 const saveHist = () => lsSet('cb_hist', JSON.stringify(chatHistory.slice(-HIST_MAX)));
+
+// ── About overlay ──────────────────────────────────────────────────────────────
+let aboutOpen = false;
+
+function setAboutOpen(open) {
+  aboutOpen = open;
+  $('about-overlay').classList.toggle('hidden', !open);
+  $('brand').setAttribute('aria-expanded', open ? 'true' : 'false');
+  $('messages').toggleAttribute('inert', open);
+  $('input-area').toggleAttribute('inert', open);
+  if (open) requestAnimationFrame(() => $('about-close').focus());
+}
+
+function initAbout() {
+  $('brand').addEventListener('click', () => setAboutOpen(!aboutOpen));
+  $('about-close').addEventListener('click', () => setAboutOpen(false));
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !aboutOpen) return;
+    e.preventDefault();
+    setAboutOpen(false);
+    $('brand').focus();
+  });
+}
 
 // ── Settings ───────────────────────────────────────────────────────────────────
 function initSettings() {
@@ -693,6 +775,7 @@ async function init() {
     chatHistory.forEach(m => appendMsg(m.role, m.content, null, false));
   } catch { chatHistory = []; }
   initDrop();
+  initAbout();
 }
 
 init();
